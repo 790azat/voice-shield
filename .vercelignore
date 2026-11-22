@@ -1,7 +1,9 @@
 /vendor
 /node_modules
 /tests
-/worker
+/worker/*
+!/worker/start.bat
+!/worker/start.sh
 /storage/logs/*
 /storage/framework/views/*
 .env

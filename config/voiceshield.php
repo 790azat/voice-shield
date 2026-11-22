@@ -27,10 +27,23 @@ return [
         'duration' => (int) env('PROTECTION_FAKE_DURATION', 12),
     ],
 
+    // "Run on my computer" mode: the browser talks to the worker on the user's own machine.
+    'local_worker_url' => env('PROTECTION_LOCAL_WORKER_URL', 'http://127.0.0.1:7860'),
+
+    // Extra open models (Hugging Face CTC) added to the ensemble for "strong against other AI" mode.
+    'ctc_models' => [
+        'ru' => 'jonatasgrosman/wav2vec2-large-xlsr-53-russian',
+        'en' => 'facebook/wav2vec2-large-960h-lv60-self',
+        'uk' => 'jonatasgrosman/wav2vec2-large-xlsr-53-ukrainian',
+        'de' => 'jonatasgrosman/wav2vec2-large-xlsr-53-german',
+        'fr' => 'jonatasgrosman/wav2vec2-large-xlsr-53-french',
+        'es' => 'jonatasgrosman/wav2vec2-large-xlsr-53-spanish',
+    ],
+
     // Vercel functions accept request bodies up to 4.5 MB.
     'max_upload_kb' => (int) env('PROTECTION_MAX_UPLOAD_KB', 4096),
 
-    'models' => ['large-v3', 'large-v3,medium', 'large-v3,medium,small'],
+    'models' => ['large-v3', 'large-v3,medium', 'large-v3,medium,small', 'medium', 'small', 'base'],
 
     'languages' => [
         'ru' => 'Русский',

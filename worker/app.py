@@ -25,6 +25,7 @@ import uuid
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
 HERE = Path(__file__).resolve().parent
@@ -35,10 +36,31 @@ WORKDIR = Path(os.environ.get("WORKDIR", tempfile.gettempdir())) / "voice-shield
 WORKDIR.mkdir(parents=True, exist_ok=True)
 
 # Matches progress lines such as "step 120/2000", "120/2000" or tqdm's "6%|".
-STEP_RE = re.compile(r"(\d+)\s*/\s*(\d+)")
+STEP_RE = re.compile(r"^step (\d+)/(\d+)")
 PCT_RE = re.compile(r"(\d{1,3})%\|")
 
 app = FastAPI(title="VoiceShield worker")
+
+# Browsers on the VoiceShield site talk to a worker running on the user's own computer.
+ALLOWED_ORIGINS = [o.strip() for o in os.environ.get(
+    "ALLOWED_ORIGINS", "https://voice-shield-amber.vercel.app,http://localhost:8000,http://127.0.0.1:8000"
+).split(",") if o.strip()]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=ALLOWED_ORIGINS,
+    allow_origin_regex=os.environ.get("ALLOWED_ORIGIN_REGEX", r"https://voice-shield-[a-z0-9-]+\.vercel\.app"),
+    allow_methods=["GET", "POST"],
+    allow_headers=["*"],
+)
+
+
+@app.middleware("http")
+async def private_network_access(request, call_next):
+    """Chrome asks before a public HTTPS page may call http://localhost (Private Network Access)."""
+    response = await call_next(request)
+    if request.headers.get("access-control-request-private-network"):
+        response.headers["Access-Control-Allow-Private-Network"] = "true"
+    return response
 jobs: dict[str, dict] = {}
 pending: "queue.Queue[str]" = queue.Queue()
 
@@ -70,6 +92,7 @@ def run(job_id: str) -> None:
             "--input", str(wav), "--output", str(out),
             "--text", p["text"], "--lang", p["lang"], "--models", p["models"],
             "--eps", str(p["eps"]), "--steps", str(p["steps"]), "--lr", str(p["lr"]),
+            "--extra-models", p["extra_models"], "--robust", "1",
         ]
         job["message"] = "Подбираем защиту под Whisper"
         proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
@@ -77,10 +100,13 @@ def run(job_id: str) -> None:
         for line in proc.stdout:  # type: ignore[union-attr]
             for chunk in line.replace("\r", "\n").splitlines():
                 tail = (tail + [chunk])[-20:]
-                if m := STEP_RE.search(chunk):
+                if chunk.startswith("loading "):
+                    job["message"] = "Загружаем модели (первый раз может занять несколько минут)"
+                elif m := STEP_RE.search(chunk):
                     done, total = int(m.group(1)), int(m.group(2))
-                    if total == int(p["steps"]) and total > 0:
+                    if total > 0:
                         job["progress"] = min(0.99, done / total)
+                        job["message"] = "Подбираем защиту"
                 elif m := PCT_RE.search(chunk):
                     job["progress"] = min(0.99, int(m.group(1)) / 100)
         if proc.wait() != 0 or not out.exists():
@@ -111,20 +137,37 @@ threading.Thread(target=worker_loop, daemon=True).start()
 threading.Thread(target=cleanup_loop, daemon=True).start()
 
 
+def gpu_name() -> str:
+    try:
+        import torch
+
+        if torch.cuda.is_available():
+            return torch.cuda.get_device_name(0)
+        if torch.backends.mps.is_available():
+            return "Apple GPU (MPS)"
+    except Exception:  # noqa: BLE001
+        pass
+    return "CPU (без видеокарты будет очень медленно)"
+
+
+GPU = gpu_name()
+
+
 @app.get("/")
 def health():
-    return {"ok": True, "script": SCRIPT.exists(), "queue": pending.qsize()}
+    return {"ok": True, "app": "voice-shield-worker", "device": GPU, "script": SCRIPT.exists(), "queue": pending.qsize()}
 
 
 @app.post("/jobs", dependencies=[Depends(auth)])
 async def create_job(
     file: UploadFile = File(...),
-    text: str = Form(...),
+    text: str = Form(""),
     lang: str = Form("ru"),
     models: str = Form("large-v3"),
     eps: float = Form(0.03),
     steps: int = Form(2000),
     lr: float = Form(0.0007),
+    extra_models: str = Form(""),
 ):
     if not SCRIPT.exists():
         raise HTTPException(status_code=500, detail=f"{SCRIPT.name} not found next to app.py")
@@ -137,7 +180,7 @@ async def create_job(
     jobs[job_id] = {
         "status": "queued", "progress": 0.0, "message": f"В очереди: {pending.qsize()} перед вами",
         "error": None, "source": source,
-        "params": {"text": text[:200], "lang": lang, "models": models, "eps": eps, "steps": steps, "lr": lr},
+        "params": {"text": text[:200], "lang": lang, "models": models, "eps": eps, "steps": steps, "lr": lr, "extra_models": extra_models},
     }
     pending.put(job_id)
     return {"id": job_id}

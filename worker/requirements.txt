@@ -1,9 +1,9 @@
 fastapi>=0.115
 uvicorn[standard]>=0.30
 python-multipart>=0.0.9
-# Dependencies of whisper_protect.py — adjust to match your script:
-torch
-torchaudio
-openai-whisper
+torch>=2.3
+torchaudio>=2.3
+openai-whisper>=20240930
+transformers>=4.44
 numpy
 soundfile
