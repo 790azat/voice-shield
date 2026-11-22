@@ -22,7 +22,8 @@ class JobController extends Controller
 
         $data = $request->validate([
             'file' => ['required', 'file', 'max:'.$config['max_upload_kb'], 'mimes:wav,mp3,m4a,ogg,oga,opus,flac,webm,aac,mp4'],
-            'text' => ['required', 'string', 'max:200'],
+            'text' => ['nullable', 'string', 'max:200'],
+            'ensemble' => ['nullable', 'boolean'],
             'lang' => ['required', Rule::in(array_keys($config['languages']))],
             'models' => ['required', Rule::in($config['models'])],
             'eps' => ['required', 'numeric', 'between:0.001,0.2'],
@@ -35,12 +36,13 @@ class JobController extends Controller
 
         try {
             $id = $backend->submit($request->file('file'), [
-                'text' => $data['text'],
+                'text' => (string) ($data['text'] ?? ''),
                 'lang' => $data['lang'],
                 'models' => $data['models'],
                 'eps' => (float) $data['eps'],
                 'steps' => (int) $data['steps'],
                 'lr' => (float) $data['lr'],
+                'extra_models' => ! empty($data['ensemble']) ? (string) ($config['ctc_models'][$data['lang']] ?? '') : '',
             ]);
         } catch (Throwable $e) {
             report($e);

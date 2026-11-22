@@ -9,7 +9,12 @@ use Throwable;
 
 class ProtectAudio extends Component
 {
+    /** break = make recognition fail, target = make Whisper hear $text */
+    public string $goal = 'break';
+
     public string $text = 'Спасибо за внимание';
+
+    public bool $ensemble = true;
 
     public string $lang = 'ru';
 
@@ -76,6 +81,8 @@ class ProtectAudio extends Component
             'presets' => config('voiceshield.presets'),
             'maxMb' => round(config('voiceshield.max_upload_kb') / 1024, 1),
             'demo' => config('voiceshield.driver') !== 'http',
+            'localUrl' => config('voiceshield.local_worker_url'),
+            'ctcModels' => config('voiceshield.ctc_models'),
         ]);
     }
 }

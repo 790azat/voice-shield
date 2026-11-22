@@ -10,7 +10,7 @@ interface ProtectionBackend
     /**
      * Start processing and return the job id.
      *
-     * @param  array{text: string, lang: string, models: string, eps: float, steps: int, lr: float}  $params
+     * @param  array{text: string, lang: string, models: string, eps: float, steps: int, lr: float, extra_models: string}  $params
      */
     public function submit(UploadedFile $audio, array $params): string;
 

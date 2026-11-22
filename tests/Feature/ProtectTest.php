@@ -30,10 +30,16 @@ class ProtectTest extends TestCase
         $this->get("/jobs/$id/download")->assertOk()->assertDownload('voice-protected.wav');
     }
 
-    public function test_validation_rejects_missing_text(): void
+    public function test_validation_rejects_missing_language(): void
     {
         $this->postJson('/jobs', ['file' => UploadedFile::fake()->create('voice.wav', 10)])
-            ->assertStatus(422)->assertJsonValidationErrors(['text']);
+            ->assertStatus(422)->assertJsonValidationErrors(['lang']);
+    }
+
+    public function test_local_worker_launchers_download(): void
+    {
+        $this->get('/download/windows')->assertOk()->assertDownload('voice-shield-start.bat');
+        $this->get('/download/unix')->assertOk()->assertDownload('voice-shield-start.sh');
     }
 
     public function test_foreign_job_cannot_be_downloaded(): void
