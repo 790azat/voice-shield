@@ -1,0 +1,7 @@
+/vendor
+/node_modules
+/tests
+/worker
+/storage/logs/*
+/storage/framework/views/*
+.env
